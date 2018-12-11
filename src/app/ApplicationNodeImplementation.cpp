@@ -11,7 +11,6 @@
 #include "core/glfw.h"
 #include <glbinding/gl/gl.h>
 #include <glbinding/Binding.h>
-#include <glbinding/callbacks.h>
 #include <imgui.h>
 #include <iostream>
 #include <glm/gtc/matrix_inverse.hpp>
@@ -20,67 +19,10 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Vertices.h"
-#include "core/imgui/imgui_impl_glfw_gl3.h"
+#include "enh/gfx/postprocessing/DepthOfField.h"
+#include "enh/gfx/postprocessing/BloomEffect.h"
+#include "enh/gfx/postprocessing/FilmicTMOperator.h"
 // #include "core/gfx/mesh/MeshRenderable.h"
-
-void ecb(const glbinding::FunctionCall & call) {
-    std::stringstream callOut;
-    callOut << call.function->name() << "(";
-    for (unsigned i = 0; i < call.parameters.size(); ++i)
-    {
-        callOut << call.parameters[i]->asString();
-        if (i < call.parameters.size() - 1)
-            callOut << ", ";
-    }
-    callOut << ")";
-
-    if (call.returnValue)
-        callOut << " -> " << call.returnValue->asString();
-
-    LOG(DBUG) << callOut.str();
-
-    const auto error = gl::glGetError();
-
-    auto doprint = true;
-    std::string errorStr;
-    switch (error)
-    {
-    case gl::GL_INVALID_ENUM:
-        errorStr = "GL_INVALID_ENUM";
-        break;
-    case gl::GL_INVALID_VALUE:
-        errorStr = "GL_INVALID_VALUE";
-        break;
-    case gl::GL_INVALID_OPERATION:
-        errorStr = "GL_INVALID_OPERATION";
-        break;
-    case gl::GL_INVALID_FRAMEBUFFER_OPERATION:
-        errorStr = "GL_INVALID_FRAMEBUFFER_OPERATION";
-        break;
-    case gl::GL_OUT_OF_MEMORY:
-        errorStr = "GL_OUT_OF_MEMORY";
-        break;
-    case gl::GL_STACK_UNDERFLOW:
-        errorStr = "GL_STACK_UNDERFLOW";
-        break;
-    case gl::GL_STACK_OVERFLOW:
-        errorStr = "GL_STACK_OVERFLOW";
-        break;
-    case gl::GL_TABLE_TOO_LARGE:
-        errorStr = "GL_TABLE_TOO_LARGE";
-        break;
-    case gl::GL_TEXTURE_TOO_LARGE_EXT:
-        errorStr = "GL_TEXTURE_TOO_LARGE_EXT";
-        break;
-    default:
-        doprint = false;
-        break;
-    }
-
-    if (doprint) {
-        LOG(WARNING) << "Error: " << errorStr;
-    }
-}
 
 namespace viscom {
 
@@ -93,22 +35,15 @@ namespace viscom {
 
     void ApplicationNodeImplementation::InitOpenGL()
     {
-        {
-            using namespace glbinding;
-            Binding::initialize();
-#ifdef VISCOM_OGL_DEBUG_MSGS
-            setCallbackMaskExcept(CallbackMask::After | CallbackMask::ParametersAndReturnValue, { "glGetError" });
-            setAfterCallback(ecb);
-#endif // VISCOM_OGL_DEBUG_MSGS
-        }
+        enh::ApplicationNodeBase::InitOpenGL();
 
-        backgroundProgram_ = GetGPUProgramManager().GetResource("backgroundGrid", std::initializer_list<std::string>{ "backgroundGrid.vert", "backgroundGrid.frag" });
+        backgroundProgram_ = GetGPUProgramManager().GetResource("backgroundGrid", std::vector<std::string>{ "backgroundGrid.vert", "backgroundGrid.frag" });
         backgroundMVPLoc_ = backgroundProgram_->getUniformLocation("MVP");
 
-        triangleProgram_ = GetGPUProgramManager().GetResource("foregroundTriangle", std::initializer_list<std::string>{ "foregroundTriangle.vert", "foregroundTriangle.frag" });
+        triangleProgram_ = GetGPUProgramManager().GetResource("foregroundTriangle", std::vector<std::string>{ "foregroundTriangle.vert", "foregroundTriangle.frag" });
         triangleMVPLoc_ = triangleProgram_->getUniformLocation("MVP");
 
-        teapotProgram_ = GetGPUProgramManager().GetResource("foregroundMesh", std::initializer_list<std::string>{ "foregroundMesh.vert", "foregroundMesh.frag" });
+        teapotProgram_ = GetGPUProgramManager().GetResource("foregroundMesh", std::vector<std::string>{ "foregroundMesh.vert", "foregroundMesh.frag" });
         teapotModelMLoc_ = teapotProgram_->getUniformLocation("modelMatrix");
         teapotNormalMLoc_ = teapotProgram_->getUniformLocation("normalMatrix");
         teapotVPLoc_ = teapotProgram_->getUniformLocation("viewProjectionMatrix");
@@ -150,13 +85,23 @@ namespace viscom {
         gl::glEnableVertexAttribArray(0);
         gl::glVertexAttribPointer(0, 3, gl::GL_FLOAT, gl::GL_FALSE, sizeof(GridVertex), reinterpret_cast<GLvoid*>(offsetof(GridVertex, position_)));
         gl::glEnableVertexAttribArray(1);
-        gl::glVertexAttribPointer(1, 4, gl::GL_FLOAT, gl::GL_FALSE, sizeof(GridVertex), reinterpret_cast<GLvoid*>(offsetof(GridVertex, color_)));
+        gl::glVertexAttribPointer(1, 4, gl::GL_FLOAT, gl::GL_FALSE, sizeof(GridVertex), reinterpret_cast<GLvoid*>(offsetof(GridVertex, color_))); //-V112
         gl::glBindVertexArray(0);
 
         gl::glBindBuffer(gl::GL_ARRAY_BUFFER, 0);
 
         teapotMesh_ = GetMeshManager().GetResource("/models/teapot/teapot.obj");
         // teapotRenderable_ = MeshRenderable::create<SimpleMeshVertex>(teapotMesh_.get(), teapotProgram_.get());
+
+        FrameBufferDescriptor sceneFBODesc{ {
+                FrameBufferTextureDescriptor{ static_cast<GLenum>(gl::GL_RGBA32F) },
+                FrameBufferTextureDescriptor{ static_cast<GLenum>(gl::GL_RGBA32F) },
+                FrameBufferTextureDescriptor{ static_cast<GLenum>(gl::GL_DEPTH_COMPONENT) } }, {} };
+        sceneFBOs_ = CreateOffscreenBuffers(sceneFBODesc);
+
+        dof_ = std::make_unique<enh::DepthOfField>(this);
+        bloom_ = std::make_unique<enh::BloomEffect>(this);
+        tm_ = std::make_unique<enh::FilmicTMOperator>(this);
     }
 
     void ApplicationNodeImplementation::UpdateFrame(double currentTime, double)
@@ -167,12 +112,17 @@ namespace viscom {
         glm::quat rollQuat = glm::angleAxis(camRot_.z, glm::vec3(0.0f, 0.0f, 1.0f));
         GetCamera()->SetOrientation(yawQuat * pitchQuat * rollQuat);
 
-        triangleModelMatrix_ = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)), static_cast<float>(currentTime), glm::vec3(0.0f, 1.0f, 0.0f));
+        triangleModelMatrix_ = glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.0f, 0.0f)), 0.1f * static_cast<float>(currentTime), glm::vec3(0.0f, 1.0f, 0.0f));
         teapotModelMatrix_ = glm::scale(glm::rotate(glm::translate(glm::mat4(0.01f), glm::vec3(-3.0f, 0.0f, -5.0f)), static_cast<float>(currentTime), glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(0.01f));
     }
 
     void ApplicationNodeImplementation::ClearBuffer(FrameBuffer& fbo)
     {
+        SelectOffscreenBuffer(sceneFBOs_)->DrawToFBO([]() {
+            gl::glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+            gl::glClear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
+        });
+
         fbo.DrawToFBO([]() {
             gl::glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
             gl::glClear(gl::GL_COLOR_BUFFER_BIT | gl::GL_DEPTH_BUFFER_BIT);
@@ -181,7 +131,8 @@ namespace viscom {
 
     void ApplicationNodeImplementation::DrawFrame(FrameBuffer& fbo)
     {
-        fbo.DrawToFBO([this]() {
+        auto sceneFBO = SelectOffscreenBuffer(sceneFBOs_);
+        sceneFBO->DrawToFBO([this]() {
             gl::glBindVertexArray(vaoBackgroundGrid_);
             gl::glBindBuffer(gl::GL_ARRAY_BUFFER, vboBackgroundGrid_);
 
@@ -189,12 +140,12 @@ namespace viscom {
             {
                 gl::glUseProgram(backgroundProgram_->getProgramId());
                 gl::glUniformMatrix4fv(backgroundMVPLoc_, 1, gl::GL_FALSE, glm::value_ptr(MVP));
-                gl::glDrawArrays(gl::GL_TRIANGLES, 0, numBackgroundVertices_);
+                // gl::glDrawArrays(gl::GL_TRIANGLES, 0, numBackgroundVertices_);
             }
 
-            {
+            for (std::size_t i = 0; i < 50; ++i) {
                 gl::glDisable(gl::GL_CULL_FACE);
-                auto triangleMVP = MVP * triangleModelMatrix_;
+                auto triangleMVP = MVP * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f * static_cast<float>(i - 8))) * triangleModelMatrix_;
                 gl::glUseProgram(triangleProgram_->getProgramId());
                 gl::glUniformMatrix4fv(triangleMVPLoc_, 1, gl::GL_FALSE, glm::value_ptr(triangleMVP));
                 gl::glDrawArrays(gl::GL_TRIANGLES, numBackgroundVertices_, 3);
@@ -214,6 +165,12 @@ namespace viscom {
             gl::glBindVertexArray(0);
             gl::glUseProgram(0);
         });
+
+        dof_->ApplyEffect(*GetCamera(), sceneFBO->GetTextures()[0], sceneFBO->GetTextures()[2], sceneFBO, 1);
+        tm_->ApplyTonemapping(sceneFBO->GetTextures()[1], sceneFBO, 0);
+        bloom_->ApplyEffect(sceneFBO->GetTextures()[0], &fbo);
+
+        // fbo.DrawToFBO([this]() {});
     }
 
     void ApplicationNodeImplementation::CleanUp()
@@ -222,6 +179,18 @@ namespace viscom {
         vaoBackgroundGrid_ = 0;
         if (vboBackgroundGrid_ != 0) gl::glDeleteBuffers(1, &vboBackgroundGrid_);
         vboBackgroundGrid_ = 0;
+
+        dof_ = nullptr;
+        tm_ = nullptr;
+        bloom_ = nullptr;
+        sceneFBOs_.clear();
+
+        teapotMesh_ = nullptr;
+        teapotProgram_ = nullptr;
+        triangleProgram_ = nullptr;
+        backgroundProgram_ = nullptr;
+
+        ApplicationNodeBase::CleanUp();
     }
 
     bool ApplicationNodeImplementation::KeyboardCallback(int key, int scancode, int action, int mods)
@@ -279,6 +248,12 @@ namespace viscom {
             return true;
         }
         return false;
+    }
+
+    bool ApplicationNodeImplementation::MouseButtonCallback(int button, int action)
+    {
+        auto test = GetCamera()->GetPickPosition(glm::vec2(0.75f, 0.5f));
+        return true;
     }
 
 }

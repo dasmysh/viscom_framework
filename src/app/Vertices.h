@@ -12,6 +12,9 @@
 
 namespace viscom {
 
+    class GPUProgram;
+    class Mesh;
+
     struct GridVertex
     {
         glm::vec3 position_;
@@ -30,13 +33,20 @@ namespace viscom {
         SimpleMeshVertex(const glm::vec3& pos, const glm::vec3& normal, const glm::vec2& tex) : position_(pos), normal_(normal), texCoords_(tex) {}
         static void SetVertexAttributes(const GPUProgram* program)
         {
-            auto attribLoc = program->getAttributeLocations({ "position", "normal", "texCoords" });
-            gl::glEnableVertexAttribArray(attribLoc[0]);
-            gl::glVertexAttribPointer(attribLoc[0], 3, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, position_)));
-            gl::glEnableVertexAttribArray(attribLoc[1]);
-            gl::glVertexAttribPointer(attribLoc[1], 3, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, normal_)));
-            gl::glEnableVertexAttribArray(attribLoc[2]);
-            gl::glVertexAttribPointer(attribLoc[2], 2, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, texCoords_)));
+            auto attribLoc = program->GetAttributeLocations({ "position", "normal", "texCoords" });
+
+            if (attribLoc[0] != -1) {
+                gl::glEnableVertexAttribArray(attribLoc[0]);
+                gl::glVertexAttribPointer(attribLoc[0], 3, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, position_)));
+            }
+            if (attribLoc[1] != -1) {
+                gl::glEnableVertexAttribArray(attribLoc[1]);
+                gl::glVertexAttribPointer(attribLoc[1], 3, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, normal_)));
+            }
+            if (attribLoc[2] != -1) {
+                gl::glEnableVertexAttribArray(attribLoc[2]);
+                gl::glVertexAttribPointer(attribLoc[2], 2, gl::GL_FLOAT, gl::GL_FALSE, sizeof(SimpleMeshVertex), reinterpret_cast<GLvoid*>(offsetof(SimpleMeshVertex, texCoords_)));
+            }
         }
 
         static GLuint CreateVertexBuffer(const Mesh* mesh)
@@ -44,7 +54,7 @@ namespace viscom {
             GLuint vbo = 0;
             gl::glGenBuffers(1, &vbo);
             std::vector<SimpleMeshVertex> bufferMem(mesh->GetVertices().size());
-            for (auto i = 0U; i < mesh->GetVertices().size(); ++i) {
+            for (std::size_t i = 0; i < mesh->GetVertices().size(); ++i) {
                 bufferMem[i].position_ = mesh->GetVertices()[i];
                 bufferMem[i].normal_ = mesh->GetNormals()[i];
                 bufferMem[i].texCoords_ = glm::vec2(mesh->GetTexCoords(0)[i]);

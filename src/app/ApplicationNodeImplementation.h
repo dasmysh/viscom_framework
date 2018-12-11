@@ -3,19 +3,24 @@
  * @author Sebastian Maisch <sebastian.maisch@uni-ulm.de>
  * @date   2016.11.30
  *
- * @brief  Declaration of the application node implementation common for master and slave nodes.
+ * @brief  Declaration of the application node implementation common for coordinator and worker nodes.
  */
 
 #pragma once
 
-#include "core/ApplicationNodeInternal.h"
-#include "core/ApplicationNodeBase.h"
+#include "enh/ApplicationNodeBase.h"
+
+namespace viscom::enh {
+    class DepthOfField;
+    class FilmicTMOperator;
+    class BloomEffect;
+}
 
 namespace viscom {
 
     class MeshRenderable;
 
-    class ApplicationNodeImplementation : public ApplicationNodeBase
+    class ApplicationNodeImplementation : public enh::ApplicationNodeBase
     {
     public:
         explicit ApplicationNodeImplementation(ApplicationNodeInternal* appNode);
@@ -32,6 +37,12 @@ namespace viscom {
         virtual void CleanUp() override;
 
         virtual bool KeyboardCallback(int key, int scancode, int action, int mods) override;
+        virtual bool MouseButtonCallback(int button, int action) override;
+
+    protected:
+        enh::DepthOfField* GetDOF() { return dof_.get(); }
+        enh::FilmicTMOperator* GetToneMapping() { return tm_.get(); }
+        enh::BloomEffect* GetBloom() { return bloom_.get(); }
 
     private:
         /** Holds the shader program for drawing the background. */
@@ -69,5 +80,10 @@ namespace viscom {
         glm::mat4 teapotModelMatrix_;
         glm::vec3 camPos_;
         glm::vec3 camRot_;
+
+        std::vector<FrameBuffer> sceneFBOs_;
+        std::unique_ptr<enh::DepthOfField> dof_;
+        std::unique_ptr<enh::BloomEffect> bloom_;
+        std::unique_ptr<enh::FilmicTMOperator> tm_;
     };
 }
