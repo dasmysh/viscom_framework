@@ -12,7 +12,6 @@
 #include <glbinding/gl/gl.h>
 #include <glbinding/Binding.h>
 #include <imgui.h>
-#include "core/gfx/mesh/AnimMeshRenderable.h"
 #include <iostream>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -24,6 +23,7 @@
 #include "enh/gfx/postprocessing/BloomEffect.h"
 #include "enh/gfx/postprocessing/FilmicTMOperator.h"
 // #include "core/gfx/mesh/MeshRenderable.h"
+// #include "core/gfx/mesh/AnimMeshRenderable.h"
 
 namespace viscom {
 
@@ -254,9 +254,8 @@ namespace viscom {
         return false;
     }
 
-    bool ApplicationNodeImplementation::MouseButtonCallback(int button, int action)
+    bool ApplicationNodeImplementation::MouseButtonCallback(int, int)
     {
-        auto test = GetCamera()->GetPickPosition(glm::vec2(0.75f, 0.5f));
         return true;
     }
 
