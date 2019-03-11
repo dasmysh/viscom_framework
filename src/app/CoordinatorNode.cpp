@@ -8,9 +8,9 @@
 
 #include "CoordinatorNode.h"
 #include <imgui.h>
-#include "enh/gfx/postprocessing/DepthOfField.h"
-#include "enh/gfx/postprocessing/BloomEffect.h"
-#include "enh/gfx/postprocessing/FilmicTMOperator.h"
+#include <gfx/postprocessing/DepthOfField.h>
+#include <gfx/postprocessing/BloomEffect.h>
+#include <gfx/postprocessing/FilmicTMOperator.h>
 
 namespace viscom {
 

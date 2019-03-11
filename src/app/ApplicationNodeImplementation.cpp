@@ -8,7 +8,7 @@
 
 #include "ApplicationNodeImplementation.h"
 
-#include "core/glfw.h"
+#include <core/glfw.h>
 #include <glbinding/gl/gl.h>
 #include <glbinding/Binding.h>
 #include <imgui.h>
@@ -19,9 +19,9 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "Vertices.h"
-#include "enh/gfx/postprocessing/DepthOfField.h"
-#include "enh/gfx/postprocessing/BloomEffect.h"
-#include "enh/gfx/postprocessing/FilmicTMOperator.h"
+#include <gfx/postprocessing/DepthOfField.h>
+#include <gfx/postprocessing/BloomEffect.h>
+#include <gfx/postprocessing/FilmicTMOperator.h>
 // #include "core/gfx/mesh/MeshRenderable.h"
 // #include "core/gfx/mesh/AnimMeshRenderable.h"
 

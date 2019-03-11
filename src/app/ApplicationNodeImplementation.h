@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "enh/ApplicationNodeBase.h"
+#include <ApplicationNodeBase.h>
 
 namespace viscom::enh {
     class DepthOfField;
